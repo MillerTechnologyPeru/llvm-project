@@ -42,6 +42,8 @@ bool MCXCOFFStreamer::emitSymbolAttribute(MCSymbol *Sym,
     Symbol->setStorageClass(XCOFF::C_HIDEXT);
     Symbol->setExternal(true);
     break;
+  case MCSA_Weak:
+    break;
   default:
     report_fatal_error("Not implemented yet.");
   }

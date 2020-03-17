@@ -2011,6 +2011,7 @@ XCOFF::StorageClass TargetLoweringObjectFileXCOFF::getStorageClassForGlobal(
     return XCOFF::C_EXT;
   case GlobalValue::ExternalWeakLinkage:
   case GlobalValue::LinkOnceODRLinkage:
+  case GlobalValue::WeakODRLinkage:
     return XCOFF::C_WEAKEXT;
   case GlobalValue::AppendingLinkage:
     report_fatal_error(
