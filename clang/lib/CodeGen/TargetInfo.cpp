@@ -4173,14 +4173,31 @@ Address WinX86_64ABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
 // PowerPC-32
 namespace {
 /// PPC32_SVR4_ABIInfo - The 32-bit PowerPC ELF (SVR4) ABI information.
-class PPC32_SVR4_ABIInfo : public DefaultABIInfo {
+class PPC32_SVR4_ABIInfo : public SwiftABIInfo {
+  DefaultABIInfo defaultInfo;
   bool IsSoftFloatABI;
 
   CharUnits getParamTypeAlignment(QualType Ty) const;
+  
+  bool shouldPassIndirectlyForSwift(ArrayRef<llvm::Type*> scalars,
+                                    bool asReturnValue) const override {
+    return occupiesMoreThan(CGT, scalars, /*total*/ 4);
+  }
+  bool isSwiftErrorInRegister() const override {
+    return true;
+  }
+  bool isLegalVectorTypeForSwift(CharUnits totalSize, llvm::Type *eltTy,
+                                 unsigned elts) const override {
+    return false;
+  }
+  
+  void computeInfo(CodeGen::CGFunctionInfo &FI) const override {
+    defaultInfo.computeInfo(FI);
+  }
 
 public:
   PPC32_SVR4_ABIInfo(CodeGen::CodeGenTypes &CGT, bool SoftFloatABI)
-      : DefaultABIInfo(CGT), IsSoftFloatABI(SoftFloatABI) {}
+      : SwiftABIInfo(CGT), defaultInfo(CGT), IsSoftFloatABI(SoftFloatABI) {}
 
   Address EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
                     QualType Ty) const override;
@@ -4235,7 +4252,7 @@ Address PPC32_SVR4_ABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAList,
 
     CharUnits SlotSize = CharUnits::fromQuantity(4);
     return emitVoidPtrVAArg(CGF, VAList, Ty,
-                            classifyArgumentType(Ty).isIndirect(), TI, SlotSize,
+                            defaultInfo.classifyArgumentType(Ty).isIndirect(), TI, SlotSize,
                             /*AllowHigherAlign=*/true);
   }
 
