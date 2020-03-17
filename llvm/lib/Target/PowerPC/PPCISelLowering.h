@@ -958,6 +958,11 @@ namespace llvm {
     bool isFPImmLegal(const APFloat &Imm, EVT VT,
                       bool ForCodeSize) const override;
 
+
+    bool isSuitableForJumpTable(const SwitchInst *SI, uint64_t NumCases,
+                                uint64_t Range, ProfileSummaryInfo *PSI,
+                                BlockFrequencyInfo *BFI) const override;
+
     unsigned getJumpTableEncoding() const override;
     bool isJumpTableRelative() const override;
     SDValue getPICJumpTableRelocBase(SDValue Table,

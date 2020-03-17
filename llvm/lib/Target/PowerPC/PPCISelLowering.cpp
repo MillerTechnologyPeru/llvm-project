@@ -2785,6 +2785,16 @@ SDValue PPCTargetLowering::LowerConstantPool(SDValue Op,
   return LowerLabelRef(CPIHi, CPILo, IsPIC, DAG);
 }
 
+
+bool PPCTargetLowering::isSuitableForJumpTable(const SwitchInst *SI, uint64_t NumCases,
+                            uint64_t Range, ProfileSummaryInfo *PSI,
+                            BlockFrequencyInfo *BFI) const {
+  if (Subtarget.getTargetTriple().isOSBinFormatXCOFF())
+    return false;
+  return TargetLowering::isSuitableForJumpTable(SI, NumCases, Range, PSI, BFI);
+}
+
+
 // For 64-bit PowerPC, prefer the more compact relative encodings.
 // This trades 32 bits per jump table entry for one or two instructions
 // on the jump site.
