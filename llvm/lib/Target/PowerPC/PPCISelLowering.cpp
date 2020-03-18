@@ -6994,7 +6994,7 @@ SDValue PPCTargetLowering::LowerFormalArguments_AIX(
     SelectionDAG &DAG, SmallVectorImpl<SDValue> &InVals) const {
 
   assert((CallConv == CallingConv::C || CallConv == CallingConv::Cold ||
-          CallConv == CallingConv::Fast) &&
+          CallConv == CallingConv::Fast || CallConv == CallingConv::Swift) &&
          "Unexpected calling convention!");
 
   if (isVarArg)
@@ -7103,7 +7103,8 @@ SDValue PPCTargetLowering::LowerCall_AIX(
 
   assert((CFlags.CallConv == CallingConv::C ||
           CFlags.CallConv == CallingConv::Cold ||
-          CFlags.CallConv == CallingConv::Fast) &&
+          CFlags.CallConv == CallingConv::Fast ||
+          CFlags.CallConv == CallingConv::Swift) &&
          "Unexpected calling convention!");
 
   if (CFlags.IsPatchPoint)
