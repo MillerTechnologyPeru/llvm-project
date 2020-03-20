@@ -649,7 +649,7 @@ public:
   ///
   unsigned getMaxCallFrameSize() const {
     // TODO: Enable this assert when targets are fixed.
-    //assert(isMaxCallFrameSizeComputed() && "MaxCallFrameSize not computed yet");
+    assert(isMaxCallFrameSizeComputed() && "MaxCallFrameSize not computed yet");
     if (!isMaxCallFrameSizeComputed())
       return 0;
     return MaxCallFrameSize;

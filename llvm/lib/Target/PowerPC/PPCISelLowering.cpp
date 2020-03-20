@@ -16024,3 +16024,8 @@ SDValue PPCTargetLowering::combineVSelect(SDNode *N,
 
   return SDValue();
 }
+
+void PPCTargetLowering::finalizeLowering(MachineFunction &MF) const {
+  MF.getFrameInfo().computeMaxCallFrameSize(MF);
+  TargetLoweringBase::finalizeLowering(MF);
+}
