@@ -302,7 +302,8 @@ BitVector PPCRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
     markSuperRegs(Reserved, PPC::R2);  // System-reserved register
 
   // On PPC64, r13 is the thread pointer. Never allocate this register.
-  if (TM.isPPC64())
+  // FIXME: While this should not be reserved in AIX /or/ Mac OS Classic, reserving it seems to avoid weirdness, so let's do it.
+  if (TM.isPPC64() || Subtarget.isAIXABI())
     markSuperRegs(Reserved, PPC::R13);
 
   if (TFI->needsFP(MF))
