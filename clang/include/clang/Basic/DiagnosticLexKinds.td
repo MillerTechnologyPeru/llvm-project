@@ -603,9 +603,7 @@ def note_init_list_at_beginning_of_macro_argument : Note<
   "cannot use initializer list at the beginning of a macro argument">;
 def err_too_few_args_in_macro_invoc : Error<
   "too few arguments provided to function-like macro invocation">;
-def err_pp_bad_paste : Error<
-  "pasting formed '%0', an invalid preprocessing token">;
-def ext_pp_bad_paste_ms : ExtWarn<
+def ext_pp_bad_paste : ExtWarn<
   "pasting formed '%0', an invalid preprocessing token">, DefaultError,
   InGroup<DiagGroup<"invalid-token-paste">>;
 def err_pp_operator_used_as_macro_name : Error<

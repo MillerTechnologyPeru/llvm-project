@@ -863,11 +863,9 @@ bool TokenLexer::pasteTokens(Token &LHSTok, ArrayRef<Token> TokenStream,
 
         // Do not emit the error when preprocessing assembler code.
         if (!PP.getLangOpts().AsmPreprocessor) {
-          // If we're in microsoft extensions mode, downgrade this from a hard
-          // error to an extension that defaults to an error.  This allows
-          // disabling it.
-          PP.Diag(Loc, PP.getLangOpts().MicrosoftExt ? diag::ext_pp_bad_paste_ms
-                                                     : diag::err_pp_bad_paste)
+          // Note that this is an extension that defaults to an error.
+          // This allows disabling it, which is important in Microsoft mode.
+          PP.Diag(Loc, diag::ext_pp_bad_paste)
               << Buffer;
         }
 
