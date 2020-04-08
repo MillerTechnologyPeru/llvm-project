@@ -16,6 +16,7 @@
 #include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/MC/MCDirectives.h"
 #include "llvm/MC/MCObjectWriter.h"
+#include "llvm/MC/MCSectionXCOFF.h"
 #include "llvm/MC/MCSymbolXCOFF.h"
 #include "llvm/Support/TargetRegistry.h"
 
@@ -107,4 +108,10 @@ void MCXCOFFStreamer::emitXCOFFLocalCommonSymbol(MCSymbol *LabelSym,
                                                  MCSymbol *CsectSym,
                                                  unsigned ByteAlignment) {
   emitCommonSymbol(CsectSym, Size, ByteAlignment);
+}
+
+void MCXCOFFStreamer::emitAssignment(MCSymbol *Symbol, const MCExpr *Value) {
+  MCObjectStreamer::emitAssignment(Symbol, Value);
+  auto *ValueSect = cast<MCSectionXCOFF>(Value->findAssociatedFragment()->getParent());
+  cast<MCSymbolXCOFF>(Symbol)->setContainingCsect(ValueSect);
 }

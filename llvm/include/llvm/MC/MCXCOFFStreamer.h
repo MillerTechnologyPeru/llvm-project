@@ -29,6 +29,8 @@ public:
   void emitXCOFFLocalCommonSymbol(MCSymbol *LabelSym, uint64_t Size,
                                   MCSymbol *CsectSym,
                                   unsigned ByteAlign) override;
+
+  void emitAssignment(MCSymbol *Symbol, const MCExpr *Value) override;
 };
 
 } // end namespace llvm
