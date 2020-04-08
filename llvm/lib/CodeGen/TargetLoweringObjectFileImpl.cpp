@@ -1994,12 +1994,6 @@ MCSection *TargetLoweringObjectFileXCOFF::getStaticDtorSection(
   report_fatal_error("XCOFF dtor section not yet implemented.");
 }
 
-const MCExpr *TargetLoweringObjectFileXCOFF::lowerRelativeReference(
-    const GlobalValue *LHS, const GlobalValue *RHS,
-    const TargetMachine &TM) const {
-  report_fatal_error("XCOFF not yet implemented.");
-}
-
 XCOFF::StorageClass TargetLoweringObjectFileXCOFF::getStorageClassForGlobal(
     const GlobalObject *GO) {
   switch (GO->getLinkage()) {

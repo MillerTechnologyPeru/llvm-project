@@ -235,10 +235,6 @@ public:
   MCSection *getStaticDtorSection(unsigned Priority,
                                   const MCSymbol *KeySym) const override;
 
-  const MCExpr *lowerRelativeReference(const GlobalValue *LHS,
-                                       const GlobalValue *RHS,
-                                       const TargetMachine &TM) const override;
-
   MCSection *SelectSectionForGlobal(const GlobalObject *GO, SectionKind Kind,
                                     const TargetMachine &TM) const override;
 
