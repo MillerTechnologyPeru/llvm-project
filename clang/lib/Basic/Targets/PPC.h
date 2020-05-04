@@ -462,6 +462,15 @@ public:
   BuiltinVaListKind getBuiltinVaListKind() const override {
     return TargetInfo::CharPtrBuiltinVaList;
   }
+
+  CallingConvCheckResult checkCallingConvention(CallingConv CC) const override {
+    switch (CC) {
+    case CC_Swift:
+      return CCCR_OK;
+    default:
+      return AIXTargetInfo<PPC32TargetInfo>::checkCallingConvention(CC);
+    }
+  }
 };
 
 class LLVM_LIBRARY_VISIBILITY AIXPPC64TargetInfo :
