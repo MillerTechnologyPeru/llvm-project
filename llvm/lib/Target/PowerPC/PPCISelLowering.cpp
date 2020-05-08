@@ -444,8 +444,10 @@ PPCTargetLowering::PPCTargetLowering(const PPCTargetMachine &TM,
   setOperationAction(ISD::ConstantPool,  MVT::i64, Custom);
   setOperationAction(ISD::JumpTable,     MVT::i64, Custom);
 
-  // TRAP is legal.
-  setOperationAction(ISD::TRAP, MVT::Other, Legal);
+  // TRAP is not legal on Mac OS 9; we just want to abort the program, not the OS.
+  // FIXME: Distinguish OS 9 and modern AIX.
+  if (getTargetTriple().isOSAIX())
+    setOperationAction(ISD::TRAP, MVT::Other, Legal);
 
   // TRAMPOLINE is custom lowered.
   setOperationAction(ISD::INIT_TRAMPOLINE, MVT::Other, Custom);
