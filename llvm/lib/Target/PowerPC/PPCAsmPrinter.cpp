@@ -1720,10 +1720,6 @@ void PPCAIXAsmPrinter::emitEndOfAsmFile(Module &M) {
 }
 
 bool PPCAIXAsmPrinter::doInitialization(Module &M) {
-  if (M.alias_size() > 0u)
-    report_fatal_error(
-        "module has aliases, which LLVM does not yet support for AIX");
-
   const bool Result = PPCAsmPrinter::doInitialization(M);
 
   auto setCsectAlignment = [this](const GlobalObject *GO) {
