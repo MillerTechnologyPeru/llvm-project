@@ -2127,13 +2127,12 @@ XCOFF::StorageClass TargetLoweringObjectFileXCOFF::getStorageClassForGlobal(
     return XCOFF::C_HIDEXT;
   case GlobalValue::ExternalLinkage:
   case GlobalValue::CommonLinkage:
-    return XCOFF::C_EXT;
   case GlobalValue::ExternalWeakLinkage:
   case GlobalValue::LinkOnceAnyLinkage:
   case GlobalValue::LinkOnceODRLinkage:
   case GlobalValue::WeakAnyLinkage:
   case GlobalValue::WeakODRLinkage:
-    return XCOFF::C_WEAKEXT;
+    return XCOFF::C_EXT;
   case GlobalValue::AppendingLinkage:
     report_fatal_error(
         "There is no mapping that implements AppendingLinkage for XCOFF.");

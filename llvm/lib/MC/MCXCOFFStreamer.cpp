@@ -45,7 +45,7 @@ bool MCXCOFFStreamer::emitSymbolAttribute(MCSymbol *Sym,
     Symbol->setExternal(true);
     break;
   case llvm::MCSA_Weak:
-    Symbol->setStorageClass(XCOFF::C_WEAKEXT);
+    Symbol->setStorageClass(XCOFF::C_EXT);
     Symbol->setExternal(true);
     break;
   case MCSA_Hidden:
