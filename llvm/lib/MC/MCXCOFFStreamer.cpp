@@ -118,9 +118,3 @@ void MCXCOFFStreamer::emitXCOFFLocalCommonSymbol(MCSymbol *LabelSym,
                                                  unsigned ByteAlignment) {
   emitCommonSymbol(CsectSym, Size, ByteAlignment);
 }
-
-void MCXCOFFStreamer::emitAssignment(MCSymbol *Symbol, const MCExpr *Value) {
-  MCObjectStreamer::emitAssignment(Symbol, Value);
-  auto *ValueSect = cast<MCSectionXCOFF>(Value->findAssociatedFragment()->getParent());
-  cast<MCSymbolXCOFF>(Symbol)->setRepresentedCsect(ValueSect);
-}
