@@ -172,10 +172,14 @@ struct Section : public Chunk {
   StringRef Link;
   llvm::yaml::Hex64 AddressAlign;
   Optional<llvm::yaml::Hex64> EntSize;
+  Optional<llvm::yaml::Hex64> Offset;
 
   // Usually sections are not created implicitly, but loaded from YAML.
   // When they are, this flag is used to signal about that.
   bool IsImplicit;
+
+  // Holds the original section index.
+  unsigned OriginalSecNdx;
 
   Section(ChunkKind Kind, bool IsImplicit = false)
       : Chunk(Kind), IsImplicit(IsImplicit) {}
@@ -278,6 +282,11 @@ struct HashSection : Section {
   Optional<llvm::yaml::Hex64> Size;
   Optional<std::vector<uint32_t>> Bucket;
   Optional<std::vector<uint32_t>> Chain;
+
+  // The following members are used to override section fields.
+  // This is useful for creating invalid objects.
+  Optional<llvm::yaml::Hex64> NBucket;
+  Optional<llvm::yaml::Hex64> NChain;
 
   HashSection() : Section(ChunkKind::Hash) {}
 

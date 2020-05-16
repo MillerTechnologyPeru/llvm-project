@@ -37,7 +37,6 @@
 #include "llvm/CodeGen/TargetCallingConv.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/Attributes.h"
-#include "llvm/IR/CallSite.h"
 #include "llvm/IR/CallingConv.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
@@ -257,9 +256,9 @@ public:
 
   /// Enum that specifies when a float negation is beneficial.
   enum class NegatibleCost {
-    Expensive = 0,  // Negated expression is more expensive.
+    Cheaper = 0,    // Negated expression is cheaper.
     Neutral = 1,    // Negated expression has the same cost.
-    Cheaper = 2     // Negated expression is cheaper.
+    Expensive = 2   // Negated expression is more expensive.
   };
 
   class ArgListEntry {
@@ -278,7 +277,7 @@ public:
     bool IsSwiftSelf : 1;
     bool IsSwiftError : 1;
     bool IsCFGuardTarget : 1;
-    uint16_t Alignment = 0;
+    MaybeAlign Alignment = None;
     Type *ByValType = nullptr;
 
     ArgListEntry()
@@ -287,10 +286,6 @@ public:
           IsSwiftSelf(false), IsSwiftError(false), IsCFGuardTarget(false) {}
 
     void setAttributes(const CallBase *Call, unsigned ArgIdx);
-
-    void setAttributes(ImmutableCallSite *CS, unsigned ArgIdx) {
-      return setAttributes(cast<CallBase>(CS->getInstruction()), ArgIdx);
-    }
   };
   using ArgListTy = std::vector<ArgListEntry>;
 
@@ -349,6 +344,12 @@ public:
   /// the alloca address space specified through the data layout.
   MVT getFrameIndexTy(const DataLayout &DL) const {
     return getPointerTy(DL, DL.getAllocaAddrSpace());
+  }
+
+  /// Return the type for code pointers, which is determined by the program
+  /// address space specified through the data layout.
+  MVT getProgramPointerTy(const DataLayout &DL) const {
+    return getPointerTy(DL, DL.getProgramAddressSpace());
   }
 
   /// Return the type for operands of fence.
@@ -1659,18 +1660,16 @@ public:
 
   /// If a physical register, this returns the register that receives the
   /// exception address on entry to an EH pad.
-  virtual unsigned
+  virtual Register
   getExceptionPointerRegister(const Constant *PersonalityFn) const {
-    // 0 is guaranteed to be the NoRegister value on all targets
-    return 0;
+    return Register();
   }
 
   /// If a physical register, this returns the register that receives the
   /// exception typeid on entry to a landing pad.
-  virtual unsigned
+  virtual Register
   getExceptionSelectorRegister(const Constant *PersonalityFn) const {
-    // 0 is guaranteed to be the NoRegister value on all targets
-    return 0;
+    return Register();
   }
 
   virtual bool needsFixedCatchObjects() const {
@@ -1962,6 +1961,18 @@ public:
     return ISD::ZERO_EXTEND;
   }
 
+  /// Returns how the platform's atomic compare and swap expects its comparison
+  /// value to be extended (ZERO_EXTEND, SIGN_EXTEND, or ANY_EXTEND). This is
+  /// separate from getExtendForAtomicOps, which is concerned with the
+  /// sign-extension of the instruction's output, whereas here we are concerned
+  /// with the sign-extension of the input. For targets with compare-and-swap
+  /// instructions (or sub-word comparisons in their LL/SC loop expansions),
+  /// the input can be ANY_EXTEND, but the output will still have a specific
+  /// extension.
+  virtual ISD::NodeType getExtendForAtomicCmpSwapArg() const {
+    return ISD::ANY_EXTEND;
+  }
+
   /// @}
 
   /// Returns true if we should normalize
@@ -2050,7 +2061,7 @@ protected:
 
   /// If set to a physical register, this specifies the register that
   /// llvm.savestack/llvm.restorestack should save and restore.
-  void setStackPointerRegisterToSaveRestore(unsigned R) {
+  void setStackPointerRegisterToSaveRestore(Register R) {
     StackPointerRegisterToSaveRestore = R;
   }
 
@@ -2325,11 +2336,21 @@ public:
   }
 
   /// Return true if it's significantly cheaper to shift a vector by a uniform
-  /// scalar than by an amount which will vary across each lane. On x86, for
-  /// example, there is a "psllw" instruction for the former case, but no simple
-  /// instruction for a general "a << b" operation on vectors.
+  /// scalar than by an amount which will vary across each lane. On x86 before
+  /// AVX2 for example, there is a "psllw" instruction for the former case, but
+  /// no simple instruction for a general "a << b" operation on vectors.
+  /// This should also apply to lowering for vector funnel shifts (rotates).
   virtual bool isVectorShiftByScalarCheap(Type *Ty) const {
     return false;
+  }
+
+  /// Given a shuffle vector SVI representing a vector splat, return a new
+  /// scalar type of size equal to SVI's scalar type if the new type is more
+  /// profitable. Returns nullptr otherwise. For example under MVE float splats
+  /// are converted to integer to prevent the need to move from SPR to GPR
+  /// registers.
+  virtual Type* shouldConvertSplatType(ShuffleVectorInst* SVI) const {
+    return nullptr;
   }
 
   /// Returns true if the opcode is a commutative binary operation.
@@ -2626,11 +2647,13 @@ public:
     return false;
   }
 
-  /// Returns true if the FADD or FSUB node passed could legally be combined with
-  /// an fmul to form an ISD::FMAD.
-  virtual bool isFMADLegalForFAddFSub(const SelectionDAG &DAG,
-                                      const SDNode *N) const {
-    assert(N->getOpcode() == ISD::FADD || N->getOpcode() == ISD::FSUB);
+  /// Returns true if be combined with to form an ISD::FMAD. \p N may be an
+  /// ISD::FADD, ISD::FSUB, or an ISD::FMUL which will be distributed into an
+  /// fadd/fsub.
+  virtual bool isFMADLegal(const SelectionDAG &DAG, const SDNode *N) const {
+    assert((N->getOpcode() == ISD::FADD || N->getOpcode() == ISD::FSUB ||
+            N->getOpcode() == ISD::FMUL) &&
+           "unexpected node in FMAD forming combine");
     return isOperationLegal(ISD::FMAD, N->getValueType(0));
   }
 
@@ -2831,7 +2854,7 @@ private:
 
   /// If set to a physical register, this specifies the register that
   /// llvm.savestack/llvm.restorestack should save and restore.
-  unsigned StackPointerRegisterToSaveRestore;
+  Register StackPointerRegisterToSaveRestore;
 
   /// This indicates the default register class to use for each ValueType the
   /// target supports natively.
@@ -3535,9 +3558,39 @@ public:
 
   /// If getNegatibleCost returns Neutral/Cheaper, return the newly negated
   /// expression.
-  virtual SDValue getNegatedExpression(SDValue Op, SelectionDAG &DAG,
-                                       bool LegalOperations, bool ForCodeSize,
-                                       unsigned Depth = 0) const;
+  virtual SDValue negateExpression(SDValue Op, SelectionDAG &DAG, bool LegalOps,
+                                   bool OptForSize, unsigned Depth = 0) const;
+
+  /// Return the newly negated expression if the cost is not expensive and
+  /// set the cost in \p Cost to indicate that if it is cheaper or neutral to
+  /// do the negation.
+  SDValue getNegatedExpression(SDValue Op, SelectionDAG &DAG, bool LegalOps,
+                               bool OptForSize, NegatibleCost &Cost,
+                               unsigned Depth = 0) const {
+    Cost = getNegatibleCost(Op, DAG, LegalOps, OptForSize, Depth);
+    if (Cost != NegatibleCost::Expensive)
+      return negateExpression(Op, DAG, LegalOps, OptForSize, Depth);
+    return SDValue();
+  }
+
+  /// This is the helper function to return the newly negated expression only
+  /// when the cost is cheaper.
+  SDValue getCheaperNegatedExpression(SDValue Op, SelectionDAG &DAG,
+                                      bool LegalOps, bool OptForSize,
+                                      unsigned Depth = 0) const {
+    if (getNegatibleCost(Op, DAG, LegalOps, OptForSize, Depth) ==
+        NegatibleCost::Cheaper)
+      return negateExpression(Op, DAG, LegalOps, OptForSize, Depth);
+    return SDValue();
+  }
+
+  /// This is the helper function to return the newly negated expression if
+  /// the cost is not expensive.
+  SDValue getNegatedExpression(SDValue Op, SelectionDAG &DAG, bool LegalOps,
+                               bool OptForSize, unsigned Depth = 0) const {
+    NegatibleCost Cost = NegatibleCost::Expensive;
+    return getNegatedExpression(Op, DAG, LegalOps, OptForSize, Cost, Depth);
+  }
 
   //===--------------------------------------------------------------------===//
   // Lowering methods - These methods must be implemented by targets so that
@@ -3592,7 +3645,7 @@ public:
     ArgListTy Args;
     SelectionDAG &DAG;
     SDLoc DL;
-    ImmutableCallSite CS;
+    const CallBase *CB = nullptr;
     SmallVector<ISD::OutputArg, 32> Outs;
     SmallVector<SDValue, 32> OutVals;
     SmallVector<ISD::InputArg, 32> Ins;
@@ -3641,16 +3694,15 @@ public:
 
     CallLoweringInfo &setCallee(Type *ResultType, FunctionType *FTy,
                                 SDValue Target, ArgListTy &&ArgsList,
-                                ImmutableCallSite Call) {
+                                const CallBase &Call) {
       RetTy = ResultType;
 
       IsInReg = Call.hasRetAttr(Attribute::InReg);
       DoesNotReturn =
           Call.doesNotReturn() ||
-          (!Call.isInvoke() &&
-           isa<UnreachableInst>(Call.getInstruction()->getNextNode()));
+          (!isa<InvokeInst>(Call) && isa<UnreachableInst>(Call.getNextNode()));
       IsVarArg = FTy->isVarArg();
-      IsReturnValueUsed = !Call.getInstruction()->use_empty();
+      IsReturnValueUsed = !Call.use_empty();
       RetSExt = Call.hasRetAttr(Attribute::SExt);
       RetZExt = Call.hasRetAttr(Attribute::ZExt);
 
@@ -3660,7 +3712,7 @@ public:
       NumFixedArgs = FTy->getNumParams();
       Args = std::move(ArgsList);
 
-      CS = Call;
+      CB = &Call;
 
       return *this;
     }
@@ -3904,7 +3956,7 @@ public:
   /// Should SelectionDAG lower an atomic load of the given kind as a normal
   /// LoadSDNode (as opposed to an AtomicSDNode)?  NOTE: The intention is to
   /// eventually migrate all targets to the using LoadSDNodes, but porting is
-  /// being done target at a time.  
+  /// being done target at a time.
   virtual bool lowerAtomicLoadAsLoadSDNode(const LoadInst &LI) const {
     assert(LI.isAtomic() && "violated precondition");
     return false;
@@ -4040,7 +4092,7 @@ public:
   /// string itself isn't empty, there was an error parsing.
   virtual AsmOperandInfoVector ParseConstraints(const DataLayout &DL,
                                                 const TargetRegisterInfo *TRI,
-                                                ImmutableCallSite CS) const;
+                                                const CallBase &Call) const;
 
   /// Examine constraint type and operand type and determine a weight value.
   /// The operand object must already have been set up with the operand type.

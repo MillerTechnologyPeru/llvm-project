@@ -447,8 +447,8 @@ either via emailing to llvm-commits, or, preferably, via :ref:`Phabricator
 You'll generally want to make sure your branch has a single commit,
 corresponding to the review you wish to send, up-to-date with the upstream
 ``origin/master`` branch, and doesn't contain merges. Once you have that, you
-can use ``git show`` or ``git format-patch`` to output the diff, and attach it
-to a Phabricator review (or to an email message).
+can start `a Phabricator review <Phabricator.html>`_ (or use ``git show`` or
+``git format-patch`` to output the diff, and attach it to an email message).
 
 However, using the "Arcanist" tool is often easier. After `installing
 arcanist`_, you can upload the latest commit using:
@@ -1094,6 +1094,70 @@ Common Problems
 If you are having problems building or using LLVM, or if you have any other
 general questions about LLVM, please consult the `Frequently Asked
 Questions <FAQ.html>`_ page.
+
+If you are having problems with limited memory and build time, please try
+building with ninja instead of make. Please consider configuring the
+following options with cmake:
+
+ * -G Ninja
+   Setting this option will allow you to build with ninja instead of make.
+   Building with ninja significantly improves your build time, especially with
+   incremental builds, and improves your memory usage.
+
+ * -DLLVM_USE_LINKER
+   Setting this option to lld will significantly reduce linking time for LLVM
+   executables on ELF-based platforms, such as Linux. If you are building LLVM
+   for the first time and lld is not available to you as a binary package, then
+   you may want to use the gold linker as a faster alternative to GNU ld.
+
+ * -DCMAKE_BUILD_TYPE
+
+    - Debug --- This is the default build type. This disables optimizations while
+      compiling LLVM and enables debug info. On ELF-based platforms (e.g. Linux)
+      linking with debug info may consume a large amount of memory.
+
+    - Release --- Turns on optimizations and disables debug info. Combining the
+      Release build type with -DLLVM_ENABLE_ASSERTIONS=ON may be a good trade-off
+      between speed and debugability during development, particularly for running
+      the test suite.
+
+ * -DLLVM_ENABLE_ASSERTIONS
+   This option defaults to ON for Debug builds and defaults to OFF for Release
+   builds. As mentioned in the previous option, using the Release build type and
+   enabling assertions may be a good alternative to using the Debug build type.
+
+ * -DLLVM_PARALLEL_LINK_JOBS
+   Set this equal to number of jobs you wish to run simultaneously. This is
+   similar to the -j option used with make, but only for link jobs. This option
+   can only be used with ninja. You may wish to use a very low number of jobs,
+   as this will greatly reduce the amount of memory used during the build
+   process. If you have limited memory, you may wish to set this to 1.
+
+ * -DLLVM_TARGETS_TO_BUILD
+   Set this equal to the target you wish to build. You may wish to set this to
+   X86; however, you will find a full list of targets within the
+   llvm-project/llvm/lib/Target directory.
+
+ * -DLLVM_OPTIMIZED_TABLEGEN
+   Set this to ON to generate a fully optimized tablegen during your build. This
+   will significantly improve your build time. This is only useful if you are
+   using the Debug build type.
+
+ * -DLLVM_ENABLE_PROJECTS
+   Set this equal to the projects you wish to compile (e.g. clang, lld, etc.) If
+   compiling more than one project, separate the items with a semicolon. Should
+   you run into issues with the semicolon, try surrounding it with single quotes.
+
+ * -DCLANG_ENABLE_STATIC_ANALYZER
+   Set this option to OFF if you do not require the clang static analyzer. This
+   should improve your build time slightly.
+
+ * -DLLVM_USE_SPLIT_DWARF
+   Consider setting this to ON if you require a debug build, as this will ease
+   memory pressure on the linker. This will make linking much faster, as the
+   binaries will not contain any of the debug information; however, this will
+   generate the debug information in the form of a DWARF object file (with the
+   extension .dwo). This only applies to host platforms using ELF, such as Linux.
 
 .. _links:
 

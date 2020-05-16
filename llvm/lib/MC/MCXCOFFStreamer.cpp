@@ -36,6 +36,7 @@ bool MCXCOFFStreamer::emitSymbolAttribute(MCSymbol *Sym,
 
   switch (Attribute) {
   case MCSA_Global:
+  case MCSA_Extern:
     Symbol->setStorageClass(XCOFF::C_EXT);
     Symbol->setExternal(true);
     break;
@@ -43,8 +44,11 @@ bool MCXCOFFStreamer::emitSymbolAttribute(MCSymbol *Sym,
     Symbol->setStorageClass(XCOFF::C_HIDEXT);
     Symbol->setExternal(true);
     break;
+  case llvm::MCSA_Weak:
+    Symbol->setStorageClass(XCOFF::C_WEAKEXT);
+    Symbol->setExternal(true);
+    break;
   case MCSA_Hidden:
-  case MCSA_Weak:
     break;
   default:
     report_fatal_error("Not implemented yet.");
@@ -59,6 +63,11 @@ void MCXCOFFStreamer::emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
                       XCOFF::C_HIDEXT);
   Symbol->setCommon(Size, ByteAlignment);
 
+  // Default csect align is 4, but common symbols have explicit alignment values
+  // and we should honor it.
+  cast<MCSymbolXCOFF>(Symbol)->getRepresentedCsect()->setAlignment(
+      Align(ByteAlignment));
+
   // Emit the alignment and storage for the variable to the section.
   emitValueToAlignment(ByteAlignment);
   emitZeros(Size);
@@ -70,7 +79,7 @@ void MCXCOFFStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
   report_fatal_error("Zero fill not implemented for XCOFF.");
 }
 
-void MCXCOFFStreamer::EmitInstToData(const MCInst &Inst,
+void MCXCOFFStreamer::emitInstToData(const MCInst &Inst,
                                      const MCSubtargetInfo &STI) {
   MCAssembler &Assembler = getAssembler();
   SmallVector<MCFixup, 4> Fixups;
@@ -113,5 +122,5 @@ void MCXCOFFStreamer::emitXCOFFLocalCommonSymbol(MCSymbol *LabelSym,
 void MCXCOFFStreamer::emitAssignment(MCSymbol *Symbol, const MCExpr *Value) {
   MCObjectStreamer::emitAssignment(Symbol, Value);
   auto *ValueSect = cast<MCSectionXCOFF>(Value->findAssociatedFragment()->getParent());
-  cast<MCSymbolXCOFF>(Symbol)->setContainingCsect(ValueSect);
+  cast<MCSymbolXCOFF>(Symbol)->setRepresentedCsect(ValueSect);
 }

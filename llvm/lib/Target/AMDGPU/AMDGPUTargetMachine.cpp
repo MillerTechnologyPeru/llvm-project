@@ -16,6 +16,7 @@
 #include "AMDGPU.h"
 #include "AMDGPUAliasAnalysis.h"
 #include "AMDGPUCallLowering.h"
+#include "AMDGPUExportClustering.h"
 #include "AMDGPUInstructionSelector.h"
 #include "AMDGPULegalizerInfo.h"
 #include "AMDGPUMacroFusion.h"
@@ -192,6 +193,11 @@ static cl::opt<bool> EnableScalarIRPasses(
   cl::init(true),
   cl::Hidden);
 
+static cl::opt<bool> EnableStructurizerWorkarounds(
+    "amdgpu-enable-structurizer-workarounds",
+    cl::desc("Enable workarounds for the StructurizeCFG pass"), cl::init(false),
+    cl::Hidden);
+
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeAMDGPUTarget() {
   // Register the target
   RegisterTargetMachine<R600TargetMachine> X(getTheAMDGPUTarget());
@@ -235,11 +241,13 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeAMDGPUTarget() {
   initializeAMDGPURewriteOutArgumentsPass(*PR);
   initializeAMDGPUUnifyMetadataPass(*PR);
   initializeSIAnnotateControlFlowPass(*PR);
+  initializeSIInsertHardClausesPass(*PR);
   initializeSIInsertWaitcntsPass(*PR);
   initializeSIModeRegisterPass(*PR);
   initializeSIWholeQuadModePass(*PR);
   initializeSILowerControlFlowPass(*PR);
   initializeSIRemoveShortExecBranchesPass(*PR);
+  initializeSIPreEmitPeepholePass(*PR);
   initializeSIInsertSkipsPass(*PR);
   initializeSIMemoryLegalizerPass(*PR);
   initializeSIOptimizeExecMaskingPass(*PR);
@@ -277,6 +285,7 @@ createGCNMaxOccupancyMachineScheduler(MachineSchedContext *C) {
   DAG->addMutation(createLoadClusterDAGMutation(DAG->TII, DAG->TRI));
   DAG->addMutation(createStoreClusterDAGMutation(DAG->TII, DAG->TRI));
   DAG->addMutation(createAMDGPUMacroFusionDAGMutation());
+  DAG->addMutation(createAMDGPUExportClusteringDAGMutation());
   return DAG;
 }
 
@@ -436,20 +445,19 @@ void AMDGPUTargetMachine::adjustPassManager(PassManagerBuilder &Builder) {
       }
       PM.add(createAMDGPUUnifyMetadataPass());
       PM.add(createAMDGPUPrintfRuntimeBinding());
-      PM.add(createAMDGPUPropagateAttributesLatePass(this));
-      if (Internalize) {
+      if (Internalize)
         PM.add(createInternalizePass(mustPreserveGV));
+      PM.add(createAMDGPUPropagateAttributesLatePass(this));
+      if (Internalize)
         PM.add(createGlobalDCEPass());
-      }
       if (EarlyInline)
         PM.add(createAMDGPUAlwaysInlinePass(false));
   });
 
-  const auto &Opt = Options;
   Builder.addExtension(
     PassManagerBuilder::EP_EarlyAsPossible,
-    [AMDGPUAA, LibCallSimplify, &Opt, this](const PassManagerBuilder &,
-                                            legacy::PassManagerBase &PM) {
+    [AMDGPUAA, LibCallSimplify, this](const PassManagerBuilder &,
+                                      legacy::PassManagerBase &PM) {
       if (AMDGPUAA) {
         PM.add(createAMDGPUAAWrapperPass());
         PM.add(createAMDGPUExternalAAWrapperPass());
@@ -457,7 +465,7 @@ void AMDGPUTargetMachine::adjustPassManager(PassManagerBuilder &Builder) {
       PM.add(llvm::createAMDGPUPropagateAttributesEarlyPass(this));
       PM.add(llvm::createAMDGPUUseNativeCallsPass());
       if (LibCallSimplify)
-        PM.add(llvm::createAMDGPUSimplifyLibCallsPass(Opt, this));
+        PM.add(llvm::createAMDGPUSimplifyLibCallsPass(this));
   });
 
   Builder.addExtension(
@@ -858,7 +866,11 @@ bool GCNPassConfig::addPreISel() {
   // regions formed by them.
   addPass(&AMDGPUUnifyDivergentExitNodesID);
   if (!LateCFGStructurize) {
-    addPass(createStructurizeCFGPass(true)); // true -> SkipUniformRegions
+    if (EnableStructurizerWorkarounds) {
+      addPass(createFixIrreduciblePass());
+      addPass(createUnifyLoopExitsPass());
+    }
+    addPass(createStructurizeCFGPass(false)); // true -> SkipUniformRegions
   }
   addPass(createSinkingPass());
   addPass(createAMDGPUAnnotateUniformValues());
@@ -907,6 +919,12 @@ bool GCNPassConfig::addInstSelector() {
   AMDGPUPassConfig::addInstSelector();
   addPass(&SIFixSGPRCopiesID);
   addPass(createSILowerI1CopiesPass());
+  // TODO: We have to add FinalizeISel
+  // to expand V_ADD/SUB_U64_PSEUDO before SIFixupVectorISel
+  // that expects V_ADD/SUB -> A_ADDC/SUBB pairs expanded.
+  // Will be removed as soon as SIFixupVectorISel is changed
+  // to work with V_ADD/SUB_U64_PSEUDO instead.
+  addPass(&FinalizeISelID);
   addPass(createSIFixupVectorISelPass());
   addPass(createSIAddIMGInitPass());
   return false;
@@ -1027,8 +1045,11 @@ void GCNPassConfig::addPreEmitPass() {
   // FIXME: This stand-alone pass will emit indiv. S_NOP 0, as needed. It would
   // be better for it to emit S_NOP <N> when possible.
   addPass(&PostRAHazardRecognizerID);
+  if (getOptLevel() > CodeGenOpt::None)
+    addPass(&SIInsertHardClausesID);
 
   addPass(&SIRemoveShortExecBranchesID);
+  addPass(&SIPreEmitPeepholeID);
   addPass(&SIInsertSkipsPassID);
   addPass(&BranchRelaxationPassID);
 }
@@ -1059,8 +1080,7 @@ bool GCNTargetMachine::parseMachineFunctionInfo(
   MFI->initializeBaseYamlFields(YamlMFI);
 
   auto parseRegister = [&](const yaml::StringValue &RegName, Register &RegVal) {
-    // FIXME: Update parseNamedRegsiterReference to take a Register.
-    unsigned TempReg;
+    Register TempReg;
     if (parseNamedRegisterReference(PFS, TempReg, RegName.Value, Error)) {
       SourceRange = RegName.SourceRange;
       return true;
@@ -1111,7 +1131,7 @@ bool GCNTargetMachine::parseMachineFunctionInfo(
       return false;
 
     if (A->IsRegister) {
-      unsigned Reg;
+      Register Reg;
       if (parseNamedRegisterReference(PFS, Reg, A->RegisterName.Value, Error)) {
         SourceRange = A->RegisterName.SourceRange;
         return true;
