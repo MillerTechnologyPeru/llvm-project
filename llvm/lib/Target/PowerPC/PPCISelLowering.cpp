@@ -469,7 +469,7 @@ PPCTargetLowering::PPCTargetLowering(const PPCTargetMachine &TM,
 
   // TRAP is not legal on Mac OS 9; we just want to abort the program, not the OS.
   // FIXME: Distinguish OS 9 and modern AIX.
-  if (TM.getTargetTriple().isOSAIX())
+  if (!TM.getTargetTriple().isOSAIX())
     setOperationAction(ISD::TRAP, MVT::Other, Legal);
 
   // TRAMPOLINE is custom lowered.
