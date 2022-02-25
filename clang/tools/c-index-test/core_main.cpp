@@ -688,7 +688,7 @@ static int scanDeps(ArrayRef<const char *> Args, std::string WorkingDirectory) {
       functionObjectToCCallbackRef<void(CXModuleDependencySet *)>(Callback);
 
   CXFileDependencies *Result =
-      clang_experimental_DependencyScannerWorker_getFileDependencies_v1(
+      clang_experimental_DependencyScannerWorker_getFileDependencies_v2(
           Worker, Args.size(), Args.data(), WorkingDirectory.c_str(),
           CB.Callback, CB.Context, &Error);
   if (!Result) {
@@ -709,9 +709,8 @@ static int scanDeps(ArrayRef<const char *> Args, std::string WorkingDirectory) {
        llvm::makeArrayRef(Result->FileDeps->Strings, Result->FileDeps->Count))
     llvm::outs() << "    " << clang_getCString(FileName) << "\n";
   llvm::outs() << "  additional-build-args:";
-  for (const auto &Arg :
-       llvm::makeArrayRef(Result->AdditionalArguments->Strings,
-                          Result->AdditionalArguments->Count))
+  for (const auto &Arg : llvm::makeArrayRef(Result->BuildArguments->Strings,
+                                            Result->BuildArguments->Count))
     llvm::outs() << " " << clang_getCString(Arg);
   llvm::outs() << "\n";
 
@@ -782,9 +781,8 @@ static int scanDepsByModuleName(ArrayRef<const char *> Args,
        llvm::makeArrayRef(Result->FileDeps->Strings, Result->FileDeps->Count))
     llvm::outs() << "    " << clang_getCString(FileName) << "\n";
   llvm::outs() << "  additional-build-args:";
-  for (const auto &Arg :
-       llvm::makeArrayRef(Result->AdditionalArguments->Strings,
-                          Result->AdditionalArguments->Count))
+  for (const auto &Arg : llvm::makeArrayRef(Result->BuildArguments->Strings,
+                                            Result->BuildArguments->Count))
     llvm::outs() << " " << clang_getCString(Arg);
   llvm::outs() << "\n";
 
