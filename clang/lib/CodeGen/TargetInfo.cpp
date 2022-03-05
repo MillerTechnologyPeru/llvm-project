@@ -7624,7 +7624,7 @@ void MSP430TargetCodeGenInfo::setTargetAttributes(
 //===----------------------------------------------------------------------===//
 
 namespace {
-class MipsABIInfo : public ABIInfo {
+class MipsABIInfo : public SwiftABIInfo {
   bool IsO32;
   unsigned MinABIStackAlignInBytes, StackAlignInBytes;
   void CoerceToIntArgs(uint64_t TySize,
@@ -7634,7 +7634,7 @@ class MipsABIInfo : public ABIInfo {
   llvm::Type* getPaddingType(uint64_t Align, uint64_t Offset) const;
 public:
   MipsABIInfo(CodeGenTypes &CGT, bool _IsO32) :
-    ABIInfo(CGT), IsO32(_IsO32), MinABIStackAlignInBytes(IsO32 ? 4 : 8),
+    SwiftABIInfo(CGT), IsO32(_IsO32), MinABIStackAlignInBytes(IsO32 ? 4 : 8),
     StackAlignInBytes(IsO32 ? 8 : 16) {}
 
   ABIArgInfo classifyReturnType(QualType RetTy) const;
@@ -7643,6 +7643,15 @@ public:
   Address EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
                     QualType Ty) const override;
   ABIArgInfo extendType(QualType Ty) const;
+private:
+  bool shouldPassIndirectlyForSwift(ArrayRef<llvm::Type*> scalars,
+                                    bool asReturnValue) const override {
+    return occupiesMoreThan(CGT, scalars, /*total*/ 4);
+  }
+
+  bool isSwiftErrorInRegister() const override {
+    return false;
+  }
 };
 
 class MIPSTargetCodeGenInfo : public TargetCodeGenInfo {
