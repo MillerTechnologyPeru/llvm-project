@@ -200,6 +200,17 @@ public:
     return TargetInfo::VoidPtrBuiltinVaList;
   }
 
+  CallingConvCheckResult checkCallingConvention(CallingConv CC) const override {
+    switch (CC) {
+    case CC_Swift:
+      return CCCR_OK;
+    case CC_SwiftAsync:
+      return CCCR_Error;
+    default:
+      return CCCR_Warning;
+    }
+  }
+
   ArrayRef<const char *> getGCCRegNames() const override {
     static const char *const GCCRegNames[] = {
         // CPU register names
