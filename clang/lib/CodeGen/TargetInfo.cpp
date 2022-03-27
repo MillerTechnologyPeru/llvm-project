@@ -4592,19 +4592,24 @@ bool AIXTargetCodeGenInfo::initDwarfEHRegSizeTable(
 // PowerPC-32
 namespace {
 /// PPC32_SVR4_ABIInfo - The 32-bit PowerPC ELF (SVR4) ABI information.
-class PPC32_SVR4_ABIInfo : public DefaultABIInfo {
+class PPC32_SVR4_ABIInfo : public SwiftABIInfo {
   bool IsSoftFloatABI;
   bool IsRetSmallStructInRegABI;
 
   CharUnits getParamTypeAlignment(QualType Ty) const;
 
+private:
+  DefaultABIInfo defaultInfo;
+
 public:
   PPC32_SVR4_ABIInfo(CodeGen::CodeGenTypes &CGT, bool SoftFloatABI,
                      bool RetSmallStructInRegABI)
-      : DefaultABIInfo(CGT), IsSoftFloatABI(SoftFloatABI),
-        IsRetSmallStructInRegABI(RetSmallStructInRegABI) {}
+      : SwiftABIInfo(CGT), IsSoftFloatABI(SoftFloatABI),
+        IsRetSmallStructInRegABI(RetSmallStructInRegABI), 
+        defaultInfo(CGT) {}
 
   ABIArgInfo classifyReturnType(QualType RetTy) const;
+  ABIArgInfo classifyArgumentType(QualType Ty) const;
 
   void computeInfo(CGFunctionInfo &FI) const override {
     if (!getCXXABI().classifyReturnType(FI))
@@ -4615,6 +4620,15 @@ public:
 
   Address EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
                     QualType Ty) const override;
+  
+  private:
+    bool shouldPassIndirectlyForSwift(ArrayRef<llvm::Type*> scalars,
+                                    bool asReturnValue) const override {
+      return occupiesMoreThan(CGT, scalars, /*total*/ 4);
+    }
+    bool isSwiftErrorInRegister() const override {
+      return false;
+    }
 };
 
 class PPC32TargetCodeGenInfo : public TargetCodeGenInfo {
@@ -4686,7 +4700,11 @@ ABIArgInfo PPC32_SVR4_ABIInfo::classifyReturnType(QualType RetTy) const {
     }
   }
 
-  return DefaultABIInfo::classifyReturnType(RetTy);
+  return defaultInfo.classifyReturnType(RetTy);
+}
+
+ABIArgInfo PPC32_SVR4_ABIInfo::classifyArgumentType(QualType Ty) const {
+  return defaultInfo.classifyArgumentType(Ty);
 }
 
 // TODO: this implementation is now likely redundant with
