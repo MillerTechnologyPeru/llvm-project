@@ -290,6 +290,13 @@ def : ProcessorModel<"sifive-u74", SiFive7Model, [Feature64Bit,
                                                   FeatureStdExtD,
                                                   FeatureStdExtC]>;
 
+def : ProcessorModel<"allwinner-d1", NoSchedModel, [Feature64Bit,
+                                                  FeatureStdExtM,
+                                                  FeatureStdExtA,
+                                                  FeatureStdExtF,
+                                                  FeatureStdExtD,
+                                                  FeatureStdExtC]>;
+
 //===----------------------------------------------------------------------===//
 // Define the RISC-V target.
 //===----------------------------------------------------------------------===//
