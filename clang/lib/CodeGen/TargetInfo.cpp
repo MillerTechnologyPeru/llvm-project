@@ -4262,7 +4262,7 @@ class PPC32_SVR4_ABIInfo : public SwiftABIInfo {
     return occupiesMoreThan(CGT, scalars, /*total*/ 4);
   }
   bool isSwiftErrorInRegister() const override {
-    return true;
+    return false;
   }
   bool isLegalVectorTypeForSwift(CharUnits totalSize, llvm::Type *eltTy,
                                  unsigned elts) const override {
