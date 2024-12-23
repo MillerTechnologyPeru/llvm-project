@@ -158,6 +158,19 @@ public:
     if (ISAInfo->hasExtension("a"))
       MaxAtomicInlineWidth = 64;
   }
+
+private:
+  CallingConvCheckResult checkCallingConvention(CallingConv CC) const override {
+    switch (CC) {
+    case CC_C:
+    case CC_Swift:
+      return CCCR_OK;
+    case CC_SwiftAsync:
+      return CCCR_Error;
+    default:
+      return CCCR_Warning;
+    }
+  }
 };
 } // namespace targets
 } // namespace clang
